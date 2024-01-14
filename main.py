@@ -6,6 +6,8 @@ from PyQt6.QtWidgets import QApplication, QMainWindow, QWidget, QVBoxLayout, QTa
     QFileDialog, QComboBox
 from PyQt6.QtCore import Qt
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
+from Bio import Entrez, SeqIO
+from Bio.SeqUtils import GC
 from mpl_toolkits.mplot3d import Axes3D  # This is required for 3D plotting
 
 
@@ -22,6 +24,17 @@ def read_soft_file(file_path):
 
     return data
 
+def fetch_sequence(id, db="nucleotide"):
+    Entrez.email = "your_email@example.com"
+    handle = Entrez.efetch(db=db, id=id, rettype="gb", retmode="text")
+    record = SeqIO.read(handle, "genbank")
+    handle.close()
+    return record.seq
+
+def analyze_sequence(seq):
+    length = len(seq)
+    gc_content = GC(seq)
+    return length, gc_content
 
 class DataAnalysisWidget(QWidget):
     def __init__(self, data):
@@ -40,7 +53,6 @@ class DataAnalysisWidget(QWidget):
         if not self.data.empty:
             self.column_selector.addItems(self.data.columns)
 
-
     def update(self):
         column = self.column_selector.currentText()
         if column and column in self.data:
@@ -50,6 +62,7 @@ class DataAnalysisWidget(QWidget):
                 if child.widget():
                     child.widget().deleteLater()
 
+            # Numeric columns
             if self.data[column].dtype in [np.float64, np.int64]:
                 num_values = len(self.data[column])
                 mean_value = np.mean(self.data[column])
@@ -68,12 +81,23 @@ class DataAnalysisWidget(QWidget):
                 self.layout.addWidget(median_value_label)
                 self.layout.addWidget(max_value_label)
                 self.layout.addWidget(min_value_label)
+
+            # Check if the selected column contains gene/protein identifiers
+            elif column == "Your_Gene_or_Protein_Column_Name":
+                # Fetch the sequence for the first ID as an example
+                sequence = fetch_sequence(self.data[column].iloc[0])
+                length, gc_content = analyze_sequence(sequence)
+                length_label = QLabel(f"Length of sequence: {length}")
+                gc_content_label = QLabel(f"GC content of sequence: {gc_content:.2f}%")
+                self.layout.addWidget(length_label)
+                self.layout.addWidget(gc_content_label)
+
+            # Categorical columns
             else:
                 unique_counts = self.data[column].value_counts()
                 for value, count in unique_counts.items():
                     count_label = QLabel(f"Count of '{value}' in '{column}': {count}")
                     self.layout.addWidget(count_label)
-
 
 class VisualizationWidget(QWidget):
     def __init__(self, data):
